@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WASM Ruby Benchmark</title>
+  <style>
+      body { font-family: sans-serif; padding: 20px; }
+      #result, #size-info { font-weight: bold; font-size: 1.2em; color: #333; margin-top: 10px; }
+      #size-info { color: #0056b3; }
+      .info { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+  </style>
+
+  <script>
+    // Define the configuration for each Ruby implementation
+    const benchmarkTargets = {
+      "ruby-head-wasm-latest": {
+        name: "@ruby/head-wasm-wasi@latest:",
+        scriptUrl: "https://cdn.jsdelivr.net/npm/@ruby/head-wasm-wasi@latest/dist/browser.script.iife.js",
+        wasmUrl: "https://cdn.jsdelivr.net/npm/@ruby/head-wasm-wasi@latest/dist/ruby+stdlib.wasm"
+      },
+      "picoruby-wasm-latest": {
+        name: "@picoruby/wasm-wasi@latest",
+        scriptUrl: "https://cdn.jsdelivr.net/npm/@picoruby/wasm-wasi@latest/dist/init.iife.js",
+        wasmUrl: "https://cdn.jsdelivr.net/npm/@picoruby/wasm-wasi@latest/dist/picoruby.wasm"
+      }
+    };
+
+    // Get the target from the URL, fallback to 'head' if invalid or missing
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetKey = urlParams.get('target');
+    const currentTarget = benchmarkTargets[targetKey] || benchmarkTargets["ruby-head-wasm-latest"];
+
+    // Update the document title dynamically
+    document.title = `${currentTarget.name} Benchmark`;
+
+    // 1. Fetch WASM file size asynchronously (HEAD request)
+    fetch(currentTarget.wasmUrl, { method: 'HEAD' })
+      .then(res => {
+        const bytes = res.headers.get('content-length');
+        const sizeElem = document.getElementById('size-info');
+        if (bytes) {
+          const mb = (parseInt(bytes, 10) / 1024 / 1024).toFixed(2);
+          sizeElem.innerText = `📦 WASM Size: ${mb} MB`;
+        } else {
+          sizeElem.innerText = `📦 WASM Size: Unknown (No header info)`;
+        }
+      })
+      .catch(err => {
+        console.error("Size fetch error:", err);
+        document.getElementById('size-info').innerText = "📦 WASM Size: Fetch failed";
+      });
+
+    // 2. Start measurement just before download starts
+    window.benchmarkStartTime = performance.now();
+
+    // 3. Dynamically inject the selected IIFE script
+    const script = document.createElement('script');
+    script.src = currentTarget.scriptUrl;
+    script.async = false;
+    document.head.appendChild(script);
+  </script>
+</head>
+<body>
+<h1 id="page-title">WASM Ruby Startup Time Measurement</h1>
+<div class="info">
+  Switchable via URL parameters:
+  <ul>
+    <li><a href="?target=ruby-head-wasm-latest">@ruby/head-wasm-wasi@latest</a></li>
+    <li><a href="?target=picoruby-wasm-latest">@picoruby/wasm-wasi@latest</a></li>
+  </ul>
+</div>
+
+<div id="size-info">📦 WASM Size: Calculating...</div>
+<div id="result">⏱️ Measuring... (Downloading and initializing WASM binary)</div>
+
+<script>
+  // Update the page title display dynamically using the object property
+  document.getElementById('page-title').textContent =
+    `${currentTarget.name} IIFE Startup Time Measurement`;
+</script>
+
+<script type="text/ruby">
+  require 'js'
+
+  # Get the time the moment Ruby execution starts
+  end_time = JS.global[:performance].now.to_f
+  start_time = JS.global[:window][:benchmarkStartTime].to_f
+
+  # Calculate elapsed time in milliseconds
+  duration = (end_time - start_time).round(2)
+  message = "⏱️ Time from download start to Ruby execution: #{duration} ms"
+
+  # Output results to the screen and browser console
+  JS.global[:document].getElementById("result")[:innerText] = message
+  puts message
+
+  # Output the environment version info
+  puts "Execution Environment: Ruby #{RUBY_VERSION}"
+</script>
+</body>
+</html>
